@@ -1,80 +1,67 @@
-const express = require("express");
+
+import express from "express";
+import fetch from "node-fetch";
 
 const app = express();
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json());
 
-const AZURE_KEY = process.env.AZURE_KEY;
-const AZURE_REGION = process.env.AZURE_REGION || "southeastasia";
-const VOICE = "bn-BD-NabanitaNeural";
+const PORT = process.env.PORT || 3000;
 
+// ROOT CHECK
 app.get("/", (req, res) => {
   res.send("Bangla Azure TTS bridge is running");
 });
 
-app.post("/tts", async (req, res) => {
+// 🔥 MAIN TTS ROUTE (supports BOTH GET & POST)
+app.all("/tts", async (req, res) => {
   try {
-    console.log("Vapi body:", JSON.stringify(req.body));
+    const text = req.body.text || req.query.text;
 
-    const message = req.body.message || {};
-    const text =
-      message.text ||
-      req.body.text ||
-      "হ্যালো, আমি কীভাবে সাহায্য করতে পারি?";
+    if (!text) {
+      return res.status(400).send("Missing text");
+    }
 
-    const sampleRate = message.sampleRate || 24000;
+    const azureKey = process.env.AZURE_KEY;
+    const azureRegion = process.env.AZURE_REGION;
 
-    const outputFormat =
-      sampleRate === 8000
-        ? "raw-8khz-16bit-mono-pcm"
-        : sampleRate === 16000
-        ? "raw-16khz-16bit-mono-pcm"
-        : "raw-24khz-16bit-mono-pcm";
+    if (!azureKey || !azureRegion) {
+      return res.status(500).send("Azure config missing");
+    }
 
-    const ssml = `
-<speak version="1.0" xml:lang="bn-BD">
-  <voice name="${VOICE}">
-    ${escapeXml(text)}
-  </voice>
-</speak>`;
+    const voice = "bn-BD-NabanitaNeural";
 
     const response = await fetch(
-      `https://${AZURE_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`,
+      `https://${azureRegion}.tts.speech.microsoft.com/cognitiveservices/v1`,
       {
         method: "POST",
         headers: {
-          "Ocp-Apim-Subscription-Key": AZURE_KEY,
+          "Ocp-Apim-Subscription-Key": azureKey,
           "Content-Type": "application/ssml+xml",
-          "X-Microsoft-OutputFormat": outputFormat,
-          "User-Agent": "vapi-azure-bangla-tts"
+          "X-Microsoft-OutputFormat": "audio-16khz-32kbitrate-mono-mp3"
         },
-        body: ssml
+        body: `
+          <speak version='1.0' xml:lang='bn-BD'>
+            <voice xml:lang='bn-BD' name='${voice}'>
+              ${text}
+            </voice>
+          </speak>
+        `
       }
     );
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Azure error:", errorText);
-      return res.status(500).send("Azure TTS failed");
-    }
+    const audioBuffer = await response.arrayBuffer();
 
-    const audio = Buffer.from(await response.arrayBuffer());
+    res.set({
+      "Content-Type": "audio/mpeg"
+    });
 
-    res.setHeader("Content-Type", "application/octet-stream");
-    res.setHeader("Content-Length", audio.length);
-    res.status(200).send(audio);
-  } catch (err) {
-    console.error("Bridge error:", err);
-    res.status(500).send("Bridge error");
+    res.send(Buffer.from(audioBuffer));
+  } catch (error) {
+    console.error("TTS ERROR:", error);
+    res.status(500).send("TTS failed");
   }
 });
 
-function escapeXml(text) {
-  return String(text)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-app.listen(process.env.PORT || 3000, () => {
-  console.log("Server running");
+app.listen(PORT, () => {
+  console.log("Server running on port", PORT);
 });
