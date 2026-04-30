@@ -1,3 +1,6 @@
+
+console.log("KEY:", process.env.AZURE_KEY);
+console.log("REGION:", process.env.AZURE_REGION);
 const express = require("express");
 const fetch = require("node-fetch");
 
