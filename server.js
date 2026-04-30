@@ -1,36 +1,37 @@
 
-console.log("KEY:", process.env.AZURE_KEY);
-console.log("REGION:", process.env.AZURE_REGION);
 const express = require("express");
 const fetch = require("node-fetch");
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "2mb" }));
 
 const PORT = process.env.PORT || 3000;
 
-// ROOT CHECK
 app.get("/", (req, res) => {
   res.send("Bangla Azure TTS bridge is running");
 });
 
-// 🔥 MAIN TTS ROUTE (supports BOTH GET & POST)
 app.all("/tts", async (req, res) => {
   try {
-    const text = req.body.text || req.query.text;
-
-    if (!text) {
-      return res.status(400).send("Missing text");
-    }
+    const text =
+      req.body?.message?.text ||
+      req.body?.text ||
+      req.query?.text ||
+      "হ্যালো";
 
     const azureKey = process.env.AZURE_KEY;
-    const azureRegion = process.env.AZURE_REGION;
+    const azureRegion = process.env.AZURE_REGION || "southeastasia";
 
-    if (!azureKey || !azureRegion) {
-      return res.status(500).send("Azure config missing");
+    if (!azureKey) {
+      return res.status(500).send("Azure key missing");
     }
 
-    const voice = "bn-BD-NabanitaNeural";
+    const ssml = `
+<speak version="1.0" xml:lang="bn-BD">
+  <voice name="bn-BD-NabanitaNeural">
+    ${escapeXml(text)}
+  </voice>
+</speak>`;
 
     const response = await fetch(
       `https://${azureRegion}.tts.speech.microsoft.com/cognitiveservices/v1`,
@@ -39,30 +40,35 @@ app.all("/tts", async (req, res) => {
         headers: {
           "Ocp-Apim-Subscription-Key": azureKey,
           "Content-Type": "application/ssml+xml",
-          "X-Microsoft-OutputFormat": "audio-16khz-32kbitrate-mono-mp3"
+          "X-Microsoft-OutputFormat": "raw-24khz-16bit-mono-pcm",
+          "User-Agent": "bangla-vapi-tts"
         },
-        body: `
-          <speak version='1.0' xml:lang='bn-BD'>
-            <voice xml:lang='bn-BD' name='${voice}'>
-              ${text}
-            </voice>
-          </speak>
-        `
+        body: ssml
       }
     );
 
-    const audioBuffer = await response.arrayBuffer();
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Azure error:", errorText);
+      return res.status(500).send("Azure TTS failed");
+    }
 
-    res.set({
-      "Content-Type": "audio/mpeg"
-    });
+    const audioBuffer = Buffer.from(await response.arrayBuffer());
 
-    res.send(Buffer.from(audioBuffer));
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.send(audioBuffer);
   } catch (error) {
-    console.error("TTS ERROR:", error);
+    console.error("TTS error:", error);
     res.status(500).send("TTS failed");
   }
 });
+
+function escapeXml(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
 
 app.listen(PORT, () => {
   console.log("Server running on port", PORT);
