@@ -25,14 +25,15 @@ app.all("/tts", async (req, res) => {
     if (!azureKey) {
       return res.status(500).send("Azure key missing");
     }
-
-   <speak version="1.0" xml:lang="bn-BD">
+   const ssml = `
+<speak version="1.0" xml:lang="bn-BD">
   <voice name="bn-BD-NabanitaNeural">
     <prosody rate="8%" pitch="+8%">
       ${escapeXml(text)}
     </prosody>
   </voice>
 </speak>
+`;
 
     const response = await fetch(
       `https://${azureRegion}.tts.speech.microsoft.com/cognitiveservices/v1`,
