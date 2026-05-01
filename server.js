@@ -13,11 +13,17 @@ app.get("/", (req, res) => {
 
 app.all("/tts", async (req, res) => {
   try {
-    const text =
-      req.body?.message?.text ||
-      req.body?.text ||
-      req.query?.text ||
-      "হ্যালো";
+    let text =
+  req.body?.message?.text ||
+  req.body?.text ||
+  req.query?.text ||
+  "হ্যালো";
+
+// Add natural speaking style
+text = text
+  .replace(/\?/g, "? ")
+  .replace(/\./g, ". ")
+  .replace(/,/g, ", ");
 
     const azureKey = process.env.AZURE_KEY;
     const azureRegion = process.env.AZURE_REGION || "southeastasia";
