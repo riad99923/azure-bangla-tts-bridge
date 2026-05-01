@@ -32,11 +32,14 @@ text = text
       return res.status(500).send("Azure key missing");
     }
  
+
 const ssml = `
 <speak version="1.0" xml:lang="bn-BD">
   <voice name="bn-BD-NabanitaNeural">
-    <prosody rate="5%" pitch="+5%">
+    <prosody rate="-3%" pitch="+4%" volume="+2%">
+      <break time="100ms"/>
       ${escapeXml(text)}
+      <break time="80ms"/>
     </prosody>
   </voice>
 </speak>
